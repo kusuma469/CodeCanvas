@@ -1,3 +1,5 @@
+// components/room.tsx
+
 "use client";
 
 import { ReactNode } from "react";
@@ -9,24 +11,60 @@ import {
 import { LiveMap, LiveObject, LiveList } from "@liveblocks/client";
 import { Layer } from "@/types/canvas";
 
-
 interface RoomProps {
-    children: ReactNode
-    roomId: string
-    fallback: NonNullable<ReactNode> | null
+    children: ReactNode;
+    roomId: string;
+    fallback: NonNullable<ReactNode> | null;
+    type?: "whiteboard" | "code";
 }
 
-export const Room = ({ children,roomId,fallback }: RoomProps) => {
+export const Room = ({ children, roomId, fallback, type = "whiteboard" }: RoomProps) => {
+  console.log("[Room] Initializing with:", { roomId, type });
+  const getInitialPresence = () => {
+    const basePresence = {
+      cursor: null,
+      selection: [],
+      pencilDraft: null,
+      pencilColor: null,
+    };
+
+    return type === "code" 
+      ? {
+          ...basePresence,
+          codeSelection: null,
+          codeLanguage: "typescript",
+        }
+      : basePresence;
+  };
+
+  const getInitialStorage = () => {
+    const baseStorage = {
+      layers: new LiveMap<string, LiveObject<Layer>>(),
+      layerIds: new LiveList<string>([]),
+    };
+
+    return type === "code"
+      ? {
+          ...baseStorage,
+          codeContent: new LiveObject({
+            content: "",
+            language: "typescript",
+          }),
+        }
+      : baseStorage;
+  };
+
   return (
     <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
-      <RoomProvider id={roomId} initialPresence={{cursor: null, selection: [], pencilDraft: null, pencilColor: null}} initialStorage={{
-                layers: new LiveMap<string, LiveObject<Layer>>(),
-                layerIds: new LiveList<string>([]),
-            }}>
+      <RoomProvider
+        id={roomId}
+        initialPresence={getInitialPresence()}
+        initialStorage={getInitialStorage()}
+      >
         <ClientSideSuspense fallback={fallback}>
           {children}
         </ClientSideSuspense>
       </RoomProvider>
     </LiveblocksProvider>
   );
-}
+};

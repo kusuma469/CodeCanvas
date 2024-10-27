@@ -1,3 +1,5 @@
+// convex/codeDocument.ts
+
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -9,8 +11,7 @@ const languageImages = {
     cpp: "/placeholders/5.svg",
     html: "/placeholders/6.svg",
     css: "/placeholders/7.svg",
-    // Add more languages as needed
-    default: "/placeholders/7.svg"  // Default fallback image
+    default: "/placeholders/7.svg"
 };
 
 export const create = mutation({
@@ -35,7 +36,7 @@ export const create = mutation({
             language: args.language,
             imageUrl,
             lastModified: Date.now(),
-            content: "// Start coding here...",
+            content: "",
         });
 
         return document;
@@ -53,12 +54,10 @@ export const remove = mutation({
         }
 
         const existingDocument = await ctx.db.get(args.id);
-        
         if (!existingDocument) {
             throw new Error("Not found");
         }
 
-        // Optional: Check if user is the author
         if (existingDocument.authorId !== identity.subject) {
             throw new Error("Unauthorized");
         }
@@ -81,12 +80,10 @@ export const update = mutation({
         }
 
         const existingDocument = await ctx.db.get(args.id);
-        
         if (!existingDocument) {
             throw new Error("Not found");
         }
 
-        // Optional: Check if user is the author
         if (existingDocument.authorId !== identity.subject) {
             throw new Error("Unauthorized");
         }
@@ -131,7 +128,6 @@ export const updateContent = mutation({
         }
 
         const existingDocument = await ctx.db.get(args.id);
-        
         if (!existingDocument) {
             throw new Error("Not found");
         }
@@ -145,42 +141,42 @@ export const updateContent = mutation({
     },
 });
 
+/*
 export const get = query({
     args: {
         id: v.id("codeDocuments"),
     },
     handler: async (ctx, args) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) {
-            throw new Error("Unauthorized");
-        }
-
+        console.log("[CodeDocument] Fetching document:", args.id);
+        
+        // Try to get the document first
         const document = await ctx.db.get(args.id);
+        console.log("[CodeDocument] Document found:", document?.orgId);
         
         if (!document) {
-            throw new Error("Not found");
+            console.log("[CodeDocument] Document not found");
+            return null; // Return null instead of throwing error
+        }
+
+        // Then check authentication
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            console.log("[CodeDocument] No identity found");
+            return null; // Return null instead of throwing error
         }
 
         return document;
-    },
-});
 
-export const getByOrgId = query({
+*/
+
+export const get = query({
     args: {
-        orgId: v.string(),
+        id: v.id("codeDocuments")
     },
     handler: async (ctx, args) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) {
-            throw new Error("Unauthorized");
-        }
+        const document = await ctx.db.get(args.id);
+        return document;
 
-        const documents = await ctx.db
-            .query("codeDocuments")
-            .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
-            .order("desc")
-            .collect();
-
-        return documents;
+ 
     },
 });

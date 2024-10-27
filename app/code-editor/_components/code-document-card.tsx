@@ -36,7 +36,7 @@ export const CodeDocumentCard = ({
     });
 
     return (
-        <Link href={`/code-editor/${id}`}>
+        <Link href={`/editor/${id}`}>
             <div className="group aspect-[100/127] border rounded-lg flex flex-col justify-between overflow-hidden">
                 <div className="relative flex-1 bg-neutral-100">
                     <Image

@@ -1,5 +1,4 @@
-// Define Liveblocks types for your application
-// https://liveblocks.io/docs/api-reference/liveblocks-react#Typing-your-data
+// liveblocks.config.ts
 
 import {
   createClient,
@@ -7,9 +6,9 @@ import {
   LiveMap,
   LiveObject,
 } from "@liveblocks/client";
-import { createRoomContext, createLiveblocksContext } from "@liveblocks/react";
+import { createRoomContext } from "@liveblocks/react";
+import { Layer, Color } from "./types/canvas";
 
-import { Layer,Color } from "./types/canvas";
 export const client = createClient({
   throttle: 16,
   authEndpoint: "/api/liveblocks-auth",
@@ -17,53 +16,64 @@ export const client = createClient({
 
 declare global {
   interface Liveblocks {
-    // Each user's Presence, for useMyPresence, useOthers, etc.
+    // Combined Presence type for both whiteboard and code editor
     Presence: {
-      // Example, real-time cursor coordinates
       cursor: { x: number; y: number } | null;
       selection: string[];
       pencilDraft: [x: number, y: number, pressure: number][] | null;
       pencilColor: Color | null;
+      // Code editor specific presence
+      codeSelection?: {
+        start: number;
+        end: number;
+      } | null;
+      codeLanguage?: string | null;
     };
 
-    // The Storage tree for the room, for useMutation, useStorage, etc.
+    // Combined Storage type for both whiteboard and code editor
     Storage: {
       layers: LiveMap<string, LiveObject<Layer>>;
       layerIds: LiveList<string>;
+      // Code editor specific storage
+      codeContent?: LiveObject<{
+        content: string;
+        language: string;
+      }>;
     };
 
-    // Custom user info set when authenticating with a secret key
     UserMeta: {
       id?: string;
       info?: {
-        
         name?: string;
         picture?: string;
       };
     };
 
-    // Custom events, for useBroadcastEvent, useEventListener
-    RoomEvent: {};
-      // Example has two events, using a union
-      // | { type: "PLAY" } 
-      // | { type: "REACTION"; emoji: "🔥" };
-
-    // Custom metadata set on threads, for useThreads, useCreateThread, etc.
-    ThreadMetadata: {
-      // Example, attaching coordinates to a thread
-      // x: number;
-      // y: number;
+    // Added code editor specific events
+    RoomEvent: {
+      type: "CODE_CHANGE" | "LANGUAGE_CHANGE";
+      content?: string;
+      language?: string;
     };
 
-    // Custom room info set with resolveRoomsInfo, for useRoomInfo
-    RoomInfo: {
-      // Example, rooms with a title and url
-      // title: string;
-      // url: string;
-    };
+    ThreadMetadata: {};
+
+    RoomInfo: {};
   }
 }
 
+export const {
+  RoomProvider,
+  useRoom,
+  useMyPresence,
+  useUpdateMyPresence,
+  useSelf,
+  useOthers,
+  useStorage,
+  useMutation,
+  useHistory,
+  useCanUndo,
+  useCanRedo,
+} = createRoomContext(client);
 
-
-export {};
+export type { Room } from "@liveblocks/client";
