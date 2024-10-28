@@ -1,5 +1,4 @@
 // app/api/liveblocks-auth/route.ts
-
 import { currentUser } from "@clerk/nextjs/server";
 import { Liveblocks } from "@liveblocks/node";
 import { ConvexHttpClient } from "convex/browser";
@@ -8,7 +7,6 @@ import { auth } from "@clerk/nextjs/server";
 import { Id } from "@/convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 const liveblocks = new Liveblocks({
     secret: "sk_dev_GnaS38MSf9nXPg357zRjdhysHuzA1bYfREw2uXNkFl4buMC9I9uTkNw8-LHHWqce",
 });
@@ -23,13 +21,31 @@ export async function POST(request: Request) {
         }
 
         const { room } = await request.json();
+        let isAuthorized = false;
 
-        // Try to get document
-        const document = await convex.query(api.codeDocument.get, {
-            id: room as Id<"codeDocuments">
-        });
+        // Try to validate both board and code document access
+        try {
+            const board = await convex.query(api.board.get, {
+                id: room as Id<"boards">
+            });
+            if (board?.orgId === authorization.orgId) {
+                isAuthorized = true;
+            }
+        } catch {
+            // If not a board, check if it's a code document
+            try {
+                const document = await convex.query(api.codeDocument.get, {
+                    id: room as Id<"codeDocuments">
+                });
+                if (document?.orgId === authorization.orgId) {
+                    isAuthorized = true;
+                }
+            } catch {
+                // Not a valid board or code document
+            }
+        }
 
-        if (!document || document.orgId !== authorization.orgId) {
+        if (!isAuthorized) {
             return new Response("Unauthorized", { status: 403 });
         }
 

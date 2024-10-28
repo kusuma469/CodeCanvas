@@ -4,7 +4,7 @@
 
 import Info from "./info";
 import { Participants } from "./participants";
-import { Editor } from "./editor";
+import { CollaborativeEditor } from "./CollaborativeEditor";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -25,10 +25,11 @@ export const Canvas = ({ documentId }: CanvasProps) => {
       <Info documentId={documentId} />
       <Participants />
       <div className="h-full w-full pt-14">
-        <Editor 
-          documentId={documentId}
-          defaultValue={document.content}
-          defaultLanguage={document.language}
+     
+        <CollaborativeEditor 
+           documentId={documentId}
+           defaultValue={document.content}
+           defaultLanguage={document.language}
         />
       </div>
     </main>

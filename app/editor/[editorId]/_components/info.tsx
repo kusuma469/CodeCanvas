@@ -13,7 +13,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/hint";
-import { Actions } from "@/components/actions";
+import { CodeActions } from "@/components/code-actions";
 import { useCodeRenameModal } from "@/store/use-code-rename-modal"; 
 
 interface InfoProps {
@@ -41,7 +41,7 @@ const Info = ({ documentId }: InfoProps) => {
     <div className="absolute top-2 left-2 bg-neutral-800 rounded-md px-1.5 h-12 flex items-center shadow-md">
       <Hint label="Go to documents" side="bottom" sideOffset={10}>
         <Button asChild className="px-2" variant="ghost">
-          <Link href="/">
+          <Link href="/code-editor">
             <Image
               src="/logo.svg"
               alt="Code Editor"
@@ -65,7 +65,7 @@ const Info = ({ documentId }: InfoProps) => {
         </Button>
       </Hint>
       <TabSeparator />
-      <Actions
+      <CodeActions
         id={document._id}
         title={document.title}
         side="bottom"
@@ -73,13 +73,14 @@ const Info = ({ documentId }: InfoProps) => {
       >
         <div>
           <Hint label="Main menu" side="bottom" sideOffset={10}>
-            <Button size="icon" variant="ghost">
+            <Button size="icon" variant="board">
               <Menu className="text-white" />
             </Button>
           </Hint>
         </div>
-      </Actions>
+      </CodeActions>
     </div>
+    
   );
 };
 

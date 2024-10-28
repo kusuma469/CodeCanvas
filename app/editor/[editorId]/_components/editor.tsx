@@ -1,5 +1,4 @@
 // app/editor/[editorId]/_components/editor.tsx
-
 "use client";
 
 import * as Y from "yjs";
@@ -10,6 +9,7 @@ import { editor } from "monaco-editor";
 import { MonacoBinding } from "y-monaco";
 import { Awareness } from "y-protocols/awareness";
 import { useRoom } from "@liveblocks/react/suspense";
+import { Cursors } from "./Cursors";
 
 interface EditorProps {
   documentId: string;
@@ -53,6 +53,8 @@ export const Editor = ({
           user: {
             name: room.getSelf()?.info?.name,
             color: '#' + Math.floor(Math.random()*16777215).toString(16),
+            id: room.getSelf()?.id,
+            picture: room.getSelf()?.info?.picture
           }
         });
 
@@ -89,6 +91,7 @@ export const Editor = ({
 
   return (
     <div className="h-full w-full">
+      {provider && <Cursors yProvider={provider} />}
       <MonacoEditor
         height="100vh"
         defaultLanguage={defaultLanguage}
