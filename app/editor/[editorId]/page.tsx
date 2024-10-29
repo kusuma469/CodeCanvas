@@ -1,26 +1,23 @@
 // app/editor/[editorId]/page.tsx
-
-import { Canvas } from "./_components/canvas";
 import { Room } from "@/components/room";
 import { Loading } from "./_components/loading";
+import { EditorWithNav } from "./_components/editor-with-nav";
 
 interface EditorPageProps {
   params: {
-    editorId: string;  // This matches the folder name [editorId]
+    editorId: string;
   };
 }
 
 const EditorPage = ({ params }: EditorPageProps) => {
-  console.log("[EditorPage] Editor ID:", params.editorId);
-  
   return (
     <div className="h-screen w-screen">
       <Room 
-        roomId={params.editorId}  // Using editorId from params
+        roomId={params.editorId}
         fallback={<Loading />}
         type="code"
       >
-        <Canvas documentId={params.editorId} />  {/* Also use editorId here */}
+        <EditorWithNav documentId={params.editorId} />
       </Room>
     </div>
   );

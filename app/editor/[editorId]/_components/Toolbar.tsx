@@ -1,23 +1,23 @@
+import * as Y from "yjs";
 import styles from "./Toolbar.module.css";
-import { editor } from "monaco-editor";
 
 type Props = {
-  editor: editor.IStandaloneCodeEditor;
+  yUndoManager: Y.UndoManager;
 };
 
-export function Toolbar({ editor }: Props) {
+export function Toolbar({ yUndoManager }: Props) {
   return (
     <div className={styles.toolbar}>
       <button
         className={styles.button}
-        onClick={() => editor.trigger("", "undo", null)}
+        onClick={() => yUndoManager.undo()}
         aria-label="undo"
       >
         <UndoIcon />
       </button>
       <button
         className={styles.button}
-        onClick={() => editor.trigger("", "redo", null)}
+        onClick={() => yUndoManager.redo()}
         aria-label="redo"
       >
         <RedoIcon />

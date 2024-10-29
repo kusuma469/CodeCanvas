@@ -1,130 +1,159 @@
 "use client";
 
 import * as Y from "yjs";
+import { yCollab } from "y-codemirror.next";
+import { EditorView } from "@codemirror/view";
+import { Extension, EditorState } from "@codemirror/state";
+import { javascript } from "@codemirror/lang-javascript";
+import { useCallback, useEffect, useState } from "react";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
-import { useRoom, useUpdateMyPresence } from "@liveblocks/react/suspense";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRoom, useSelf } from "@liveblocks/react/suspense";
+import {
+  lineNumbers,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  drawSelection,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+  highlightActiveLine,
+  keymap,
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+} from "@codemirror/commands";
+import {
+  foldGutter,
+  indentOnInput,
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  bracketMatching,
+  foldKeymap,
+} from "@codemirror/language";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import styles from "./CollaborativeEditor.module.css";
-import { Editor } from "@monaco-editor/react";
-import { editor } from "monaco-editor";
-import { MonacoBinding } from "y-monaco";
-import { Awareness } from "y-protocols/awareness";
-import { Cursors } from "./Cursors";
+import { Avatars } from "./Avatars";
 import { Toolbar } from "./Toolbar";
+
+interface UserInfo {
+  name: string;
+  picture?: string;
+  color?: string;
+}
 
 interface CollaborativeEditorProps {
   documentId: string;
   defaultValue?: string;
-  defaultLanguage?: string;
+  defaultLanguage: string;
 }
 
-export function CollaborativeEditor({
+const basicSetup: Extension = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter(),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  keymap.of([
+    ...defaultKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...closeBracketsKeymap,
+  ]),
+];
+
+export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   documentId,
-  defaultValue = "",
-  defaultLanguage = "typescript"
-}: CollaborativeEditorProps) {
+  defaultValue,
+  defaultLanguage,
+}) => {
   const room = useRoom();
-  const updatePresence = useUpdateMyPresence();
-  const providerRef = useRef<LiveblocksYjsProvider | null>(null);
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const yDocRef = useRef<Y.Doc | null>(null);
-  const bindingRef = useRef<MonacoBinding | null>(null);
-  const awarenessRef = useRef<Awareness | null>(null);
+  const [element, setElement] = useState<HTMLElement>();
+  const [yUndoManager, setYUndoManager] = useState<Y.UndoManager>();
 
-  // Initialize editor
-  const handleOnMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
-    editorRef.current = editor;
-    
-    // Initialize Yjs document
-    yDocRef.current = new Y.Doc();
-    const yText = yDocRef.current.getText("monaco");
+  const userInfo = useSelf((me) => me.info) as UserInfo;
 
-    if (yText.toString() === "") {
-      yText.insert(0, defaultValue);
+  const ref = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    setElement(node);
+  }, []);
+
+  useEffect(() => {
+    let provider: LiveblocksYjsProvider;
+    let ydoc: Y.Doc;
+    let view: EditorView;
+
+    if (!element || !room || !userInfo) {
+      return;
     }
 
-    // Create and configure awareness
-    awarenessRef.current = new Awareness(yDocRef.current);
-    providerRef.current = new LiveblocksYjsProvider(room, yDocRef.current);
-
-    // Initialize presence
-    updatePresence({
-      codeSelection: null,
-      codeLanguage: defaultLanguage,
-      cursorAwareness: {
-        name: room.getSelf()?.info?.name || "Anonymous",
-        color: '#' + Math.floor(Math.random()*16777215).toString(16),
-        id: room.getSelf()?.id || "anonymous",
-        picture: room.getSelf()?.info?.picture,
+    try {
+      // Create Yjs provider and document
+      ydoc = new Y.Doc();
+      provider = new LiveblocksYjsProvider(room as any, ydoc);
+      const ytext = ydoc.getText("codemirror");
+      
+      // Set initial content if provided
+      if (defaultValue && ytext.toString() === '') {
+        ytext.insert(0, defaultValue);
       }
-    });
+      
+      const undoManager = new Y.UndoManager(ytext);
+      setYUndoManager(undoManager);
 
-    // Attach Yjs to Monaco
-    bindingRef.current = new MonacoBinding(
-      yText,
-      editor.getModel() as editor.ITextModel,
-      new Set([editor]),
-      awarenessRef.current
-    );
-
-    // Update presence when selection changes
-    editor.onDidChangeCursorSelection((e) => {
-      updatePresence({
-        codeSelection: {
-          start: e.selection.startLineNumber,
-          end: e.selection.endLineNumber,
-        },
+      // Attach user info to Yjs
+      provider.awareness.setLocalStateField("user", {
+        name: userInfo.name,
+        color: userInfo.color || "#000000",
+        colorLight: (userInfo.color || "#000000") + "80",
       });
-    });
-  }, [room, defaultValue, defaultLanguage, updatePresence]);
 
-  // Cleanup
-  useEffect(() => {
+      // Set up CodeMirror and extensions
+      const state = EditorState.create({
+        doc: ytext.toString(),
+        extensions: [
+          basicSetup,
+          javascript(), // You might want to make this dynamic based on defaultLanguage
+          yCollab(ytext, provider.awareness, { undoManager }),
+        ],
+      });
+
+      // Attach CodeMirror to element
+      view = new EditorView({
+        state,
+        parent: element,
+      });
+    } catch (error) {
+      console.error("Error initializing editor:", error);
+    }
+
     return () => {
-      bindingRef.current?.destroy();
-      awarenessRef.current?.destroy();
-      providerRef.current?.destroy();
-      yDocRef.current?.destroy();
-
-      bindingRef.current = null;
-      awarenessRef.current = null;
-      providerRef.current = null;
-      yDocRef.current = null;
-      editorRef.current = null;
+      view?.destroy();
+      provider?.destroy();
+      ydoc?.destroy();
     };
-  }, []);
+  }, [element, room, userInfo, defaultValue, defaultLanguage]);
 
   return (
     <div className={styles.container}>
-      {providerRef.current && <Cursors yProvider={providerRef.current} />}
       <div className={styles.editorHeader}>
-        <div>{editorRef.current && <Toolbar editor={editorRef.current} />}</div>
+        <div>
+          {yUndoManager ? <Toolbar yUndoManager={yUndoManager} /> : null}
+        </div>
+        <Avatars />
       </div>
-      <div className={styles.editorContainer}>
-        <Editor
-          onMount={handleOnMount}
-          height="100%"
-          width="100%"
-          theme="vs-dark"
-          defaultLanguage={defaultLanguage}
-          defaultValue={defaultValue}
-          options={{
-            tabSize: 2,
-            padding: { top: 20 },
-            minimap: { enabled: false },
-            fontSize: 14,
-            wordWrap: 'on',
-            formatOnPaste: true,
-            formatOnType: true,
-            automaticLayout: true,
-            lineNumbers: "on",
-            scrollBeyondLastLine: false,
-            quickSuggestions: true,
-            renderLineHighlight: "all",
-            suggestOnTriggerCharacters: true,
-          }}
-        />
-      </div>
+      <div className={styles.editorContainer} ref={ref}></div>
     </div>
   );
-}
+};
