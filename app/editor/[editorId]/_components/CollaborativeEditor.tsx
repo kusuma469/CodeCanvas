@@ -1,13 +1,12 @@
-"use client";
-
 import * as Y from "yjs";
 import { yCollab } from "y-codemirror.next";
 import { EditorView } from "@codemirror/view";
 import { Extension, EditorState } from "@codemirror/state";
-import { javascript } from "@codemirror/lang-javascript";
-import { useCallback, useEffect, useState } from "react";
+import { python } from "@codemirror/lang-python";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
-import { useRoom, useSelf } from "@liveblocks/react/suspense";
+import { useRoom, useSelf, useStorage, useMutation } from "@liveblocks/react/suspense";
+import { LiveObject, JsonObject } from "@liveblocks/client";
 import {
   lineNumbers,
   highlightActiveLineGutter,
@@ -32,7 +31,12 @@ import {
   bracketMatching,
   foldKeymap,
 } from "@codemirror/language";
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import {
+  closeBrackets,
+  closeBracketsKeymap,
+  autocompletion,
+  completionKeymap,
+} from "@codemirror/autocomplete";
 import styles from "./CollaborativeEditor.module.css";
 import { Avatars } from "./Avatars";
 import { Toolbar } from "./Toolbar";
@@ -43,10 +47,15 @@ interface UserInfo {
   color?: string;
 }
 
+interface CompilationState extends JsonObject {
+  output: string;
+  compiledBy: string;
+  timestamp: number;
+}
+
 interface CollaborativeEditorProps {
   documentId: string;
   defaultValue?: string;
-  defaultLanguage: string;
 }
 
 const basicSetup: Extension = [
@@ -65,41 +74,121 @@ const basicSetup: Extension = [
   rectangularSelection(),
   crosshairCursor(),
   highlightActiveLine(),
+  autocompletion(),
   keymap.of([
     ...defaultKeymap,
     ...historyKeymap,
     ...foldKeymap,
     ...closeBracketsKeymap,
+    ...completionKeymap,
   ]),
 ];
 
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   documentId,
   defaultValue,
-  defaultLanguage,
 }) => {
   const room = useRoom();
   const [element, setElement] = useState<HTMLElement>();
   const [yUndoManager, setYUndoManager] = useState<Y.UndoManager>();
+  const editorViewRef = useRef<EditorView>();
+  const [isCompiling, setIsCompiling] = useState(false);
 
   const userInfo = useSelf((me) => me.info) as UserInfo;
+  
+  // Get compilation state from LiveBlocks storage
+  const compilationState = useStorage((root) => root.compilationState);
+
+  // Initialize compilation state if it doesn't exist
+  const initializeCompilationState = useMutation(({ storage }) => {
+    const existing = storage.get('compilationState');
+    if (!existing) {
+      storage.set('compilationState', new LiveObject<CompilationState>({
+        output: '',
+        compiledBy: '',
+        timestamp: Date.now()
+      }));
+    }
+  }, []);
+
+  // Update compilation state
+  const updateCompilationState = useMutation(({ storage }, newState: Partial<CompilationState>) => {
+    const state = storage.get('compilationState');
+    if (state) {
+      if (newState.output !== undefined) state.set('output', newState.output);
+      if (newState.compiledBy !== undefined) state.set('compiledBy', newState.compiledBy);
+      if (newState.timestamp !== undefined) state.set('timestamp', newState.timestamp);
+    }
+  }, []);
 
   const ref = useCallback((node: HTMLElement | null) => {
     if (!node) return;
     setElement(node);
   }, []);
 
-  useEffect(() => {
-    let provider: LiveblocksYjsProvider;
-    let ydoc: Y.Doc;
-    let view: EditorView;
-
-    if (!element || !room || !userInfo) {
+  // Handle compilation
+  const handleCompile = async () => {
+    if (!editorViewRef.current) return;
+    
+    const code = editorViewRef.current.state.doc.toString();
+    if (!code.trim()) {
+      updateCompilationState({
+        output: "Error: No code to compile",
+        compiledBy: userInfo.name,
+        timestamp: Date.now()
+      });
       return;
     }
 
+    setIsCompiling(true);
     try {
-      // Create Yjs provider and document
+      updateCompilationState({
+        output: "Compiling...",
+        compiledBy: userInfo.name,
+        timestamp: Date.now()
+      });
+
+      const response = await fetch('http://localhost:5000/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language: 'python'
+        }),
+      });
+
+      const data = await response.json();
+      
+      updateCompilationState({
+        output: data.output || data.error || 'Unknown error occurred',
+        compiledBy: userInfo.name,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      updateCompilationState({
+        output: `Error: ${(error as Error).message}`,
+        compiledBy: userInfo.name,
+        timestamp: Date.now()
+      });
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
+  // Initialize editor and compilation state
+  useEffect(() => {
+    if (!element || !room || !userInfo) return;
+
+    let provider: LiveblocksYjsProvider;
+    let ydoc: Y.Doc;
+
+    try {
+      // Initialize compilation state
+      initializeCompilationState();
+
+      // Create Yjs document and provider
       ydoc = new Y.Doc();
       provider = new LiveblocksYjsProvider(room as any, ydoc);
       const ytext = ydoc.getText("codemirror");
@@ -112,48 +201,80 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       const undoManager = new Y.UndoManager(ytext);
       setYUndoManager(undoManager);
 
-      // Attach user info to Yjs
+      // Set awareness state
       provider.awareness.setLocalStateField("user", {
         name: userInfo.name,
         color: userInfo.color || "#000000",
         colorLight: (userInfo.color || "#000000") + "80",
       });
 
-      // Set up CodeMirror and extensions
+      // Create editor state with Python language support
       const state = EditorState.create({
         doc: ytext.toString(),
         extensions: [
           basicSetup,
-          javascript(), // You might want to make this dynamic based on defaultLanguage
+          python(),
           yCollab(ytext, provider.awareness, { undoManager }),
         ],
       });
 
-      // Attach CodeMirror to element
-      view = new EditorView({
+      // Create and store editor view
+      const view = new EditorView({
         state,
         parent: element,
       });
+      editorViewRef.current = view;
+
+      return () => {
+        view.destroy();
+        provider?.destroy();
+        ydoc?.destroy();
+      };
     } catch (error) {
       console.error("Error initializing editor:", error);
     }
-
-    return () => {
-      view?.destroy();
-      provider?.destroy();
-      ydoc?.destroy();
-    };
-  }, [element, room, userInfo, defaultValue, defaultLanguage]);
+  }, [element, room, userInfo, defaultValue, initializeCompilationState]);
 
   return (
     <div className={styles.container}>
       <div className={styles.editorHeader}>
-        <div>
+        <div className={styles.toolbar}>
           {yUndoManager ? <Toolbar yUndoManager={yUndoManager} /> : null}
         </div>
         <Avatars />
       </div>
       <div className={styles.editorContainer} ref={ref}></div>
+      <div className={styles.compileSection}>
+        <button 
+          onClick={handleCompile}
+          className={styles.compileButton}
+          disabled={isCompiling}
+        >
+          {isCompiling ? 'Running...' : 'Run Python Code'}
+        </button>
+        <div className={styles.outputContainer}>
+          <h3>Output:</h3>
+          <pre className={styles.output}>
+            {compilationState ? (
+              <>
+                {compilationState.output}
+                {compilationState.compiledBy && (
+                  <div className={styles.compilationInfo}>
+                    <span className={styles.compiler}>
+                      Run by: {compilationState.compiledBy}
+                    </span>
+                    <span className={styles.timestamp}>
+                      at {new Date(compilationState.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              'No output yet'
+            )}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 };

@@ -24,7 +24,7 @@ export const NewDocumentButton = ({
             const documentId = await create({
                 orgId,
                 title: "Untitled",
-                language: "javascript",
+                language: "python",
             });
 
             // documentId is directly the ID string from Convex

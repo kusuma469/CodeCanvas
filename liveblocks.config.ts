@@ -24,7 +24,13 @@ export const client = createClient({
   authEndpoint: "/api/liveblocks-auth",
 });
 
-// Define Presence as a Record type to ensure it's a valid JSON object
+// Define CompilationState as a valid LSON object
+interface CompilationState extends JsonObject {
+  output: string;
+  compiledBy: string;
+  timestamp: number;
+}
+
 type Presence = {
   cursor: { x: number; y: number } | null;
   selection: string[];
@@ -50,6 +56,7 @@ type Storage = {
     content: string;
     language: string;
   }>;
+  compilationState: LiveObject<CompilationState>;
 };
 
 type UserMeta = {
@@ -61,9 +68,10 @@ type UserMeta = {
 };
 
 type RoomEvent = {
-  type: "CODE_CHANGE" | "LANGUAGE_CHANGE";
+  type: "CODE_CHANGE" | "LANGUAGE_CHANGE" | "COMPILATION_UPDATE";
   content?: string;
   language?: string;
+  compilationState?: CompilationState;
 };
 
 declare global {
