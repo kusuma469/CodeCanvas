@@ -103,22 +103,23 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   const initializeCompilationState = useMutation(({ storage }) => {
     const existing = storage.get('compilationState');
     if (!existing) {
-      storage.set('compilationState', new LiveObject<CompilationState>({
+      const initialState = new LiveObject<CompilationState>({
         output: '',
         compiledBy: '',
         timestamp: Date.now()
-      }));
+      });
+      storage.set('compilationState', initialState);
     }
   }, []);
 
-  // Update compilation state
+  // Update compilation state with batch mutation
   const updateCompilationState = useMutation(({ storage }, newState: Partial<CompilationState>) => {
-    const state = storage.get('compilationState');
-    if (state) {
-      if (newState.output !== undefined) state.set('output', newState.output);
-      if (newState.compiledBy !== undefined) state.set('compiledBy', newState.compiledBy);
-      if (newState.timestamp !== undefined) state.set('timestamp', newState.timestamp);
-    }
+    storage.set('compilationState', new LiveObject<CompilationState>({
+      output: (storage.get('compilationState') as any)?.output ?? '',
+      compiledBy: (storage.get('compilationState') as any)?.compiledBy ?? '',
+      timestamp: (storage.get('compilationState') as any)?.timestamp ?? Date.now(),
+      ...newState
+    }));
   }, []);
 
   const ref = useCallback((node: HTMLElement | null) => {
