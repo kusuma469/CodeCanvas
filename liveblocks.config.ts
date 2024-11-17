@@ -31,6 +31,13 @@ interface CompilationState extends JsonObject {
   timestamp: number;
 }
 
+interface ChatMessage extends JsonObject {
+  id: string;
+  text: string;
+  sender: string;
+  timestamp: number;
+}
+
 type Presence = {
   cursor: { x: number; y: number } | null;
   selection: string[];
@@ -57,6 +64,7 @@ type Storage = {
     language: string;
   }>;
   compilationState: LiveObject<CompilationState>;
+  messages: LiveList<ChatMessage>; 
 };
 
 type UserMeta = {

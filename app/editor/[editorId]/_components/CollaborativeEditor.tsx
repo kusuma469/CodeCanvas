@@ -6,7 +6,9 @@ import { python } from "@codemirror/lang-python";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import { useRoom, useSelf, useStorage, useMutation } from "@liveblocks/react/suspense";
-import { LiveObject, JsonObject } from "@liveblocks/client";
+import { LiveMap, LiveObject, JsonObject, LiveList } from "@liveblocks/client";
+import { Layer, LayerType } from "@/types/canvas";
+import { Storage , ChatMessage, CompilationState} from "@/types/storage";
 import {
   lineNumbers,
   highlightActiveLineGutter,
@@ -41,17 +43,13 @@ import styles from "./CollaborativeEditor.module.css";
 import { Avatars } from "./Avatars";
 import { Toolbar } from "./Toolbar";
 
+
 interface UserInfo {
   name: string;
   picture?: string;
   color?: string;
 }
 
-interface CompilationState extends JsonObject {
-  output: string;
-  compiledBy: string;
-  timestamp: number;
-}
 
 interface CollaborativeEditorProps {
   documentId: string;
@@ -84,7 +82,6 @@ const basicSetup: Extension = [
   ]),
 ];
 
-// Add retry configuration
 const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
 
@@ -98,20 +95,28 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   const editorViewRef = useRef<EditorView>();
   const [isCompiling, setIsCompiling] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [chatMessage, setChatMessage] = useState("");
 
   const userInfo = useSelf((me) => me.info) as UserInfo;
   
   const compilationState = useStorage((root) => root.compilationState);
-
-  const initializeCompilationState = useMutation(({ storage }) => {
+  const messages = useStorage((root) => root.messages);
+  
+  const initializeStorage = useMutation(({ storage }) => {
+    // Initialize compilation state
     const existing = storage.get('compilationState');
     if (!existing) {
-      const initialState = new LiveObject<CompilationState>({
+      storage.set('compilationState', new LiveObject<CompilationState>({
         output: '',
         compiledBy: '',
         timestamp: Date.now()
-      });
-      storage.set('compilationState', initialState);
+      }));
+    }
+    
+    // Initialize messages if they don't exist
+    const existingMessages = storage.get('messages');
+    if (!existingMessages) {
+      storage.set('messages', new LiveList<ChatMessage>([]));
     }
   }, []);
 
@@ -123,6 +128,31 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       ...newState
     }));
   }, []);
+
+  const sendMessage = useMutation(({ storage }, text: string) => {
+    try {
+      const messagesList = storage.get('messages');
+      if (messagesList && messagesList.push) {
+        messagesList.push({
+          id: Date.now().toString(),
+          text,
+          sender: userInfo.name,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  }, [userInfo.name]);
+  // }, [chatMessage, userInfo.name]);
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (chatMessage.trim()) {
+      sendMessage(chatMessage);
+      setChatMessage("");
+    }
+  };
 
   const ref = useCallback((node: HTMLElement | null) => {
     if (!node) return;
@@ -173,13 +203,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         timestamp: Date.now()
       });
 
-      // Reset retry count on success
       setRetryCount(0);
       
     } catch (error) {
       console.error('Compilation error:', error);
       
-      // Implement retry logic
       if (retryAttempt < MAX_RETRIES) {
         setRetryCount(retryAttempt + 1);
         setTimeout(() => handleCompile(retryAttempt + 1), RETRY_DELAY * (retryAttempt + 1));
@@ -203,7 +231,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     let ydoc: Y.Doc;
 
     try {
-      initializeCompilationState();
+      initializeStorage();
 
       ydoc = new Y.Doc();
       provider = new LiveblocksYjsProvider(room as any, ydoc);
@@ -245,7 +273,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     } catch (error) {
       console.error("Error initializing editor:", error);
     }
-  }, [element, room, userInfo, defaultValue, initializeCompilationState]);
+  }, [element, room, userInfo, defaultValue, initializeStorage]);
 
   return (
     <div className={styles.container}>
@@ -255,36 +283,70 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         </div>
         <Avatars />
       </div>
-      <div className={styles.editorContainer} ref={ref}></div>
-      <div className={styles.compileSection}>
-        <button 
-          onClick={() => handleCompile(0)}
-          className={styles.compileButton}
-          disabled={isCompiling}
-        >
-          {isCompiling ? `Running${retryCount > 0 ? ` (Retry ${retryCount}/${MAX_RETRIES})` : '...'}` : 'Run Python Code'}
-        </button>
-        <div className={styles.outputContainer}>
-          <h3>Output:</h3>
-          <pre className={styles.output}>
-            {compilationState ? (
-              <>
-                {compilationState.output}
-                {compilationState.compiledBy && (
-                  <div className={styles.compilationInfo}>
-                    <span className={styles.compiler}>
-                      Run by: {compilationState.compiledBy}
-                    </span>
-                    <span className={styles.timestamp}>
-                      at {new Date(compilationState.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
+      <div className={styles.mainContent}>
+        <div className={styles.editorSection}>
+          <div className={styles.editorContainer} ref={ref}></div>
+          <div className={styles.compileSection}>
+            <button 
+              onClick={() => handleCompile(0)}
+              className={styles.compileButton}
+              disabled={isCompiling}
+            >
+              {isCompiling ? `Running${retryCount > 0 ? ` (Retry ${retryCount}/${MAX_RETRIES})` : '...'}` : 'Run Python Code'}
+            </button>
+            <div className={styles.outputContainer}>
+              <h3>Output:</h3>
+              <pre className={styles.output}>
+                {compilationState ? (
+                  <>
+                    {compilationState.output}
+                    {compilationState.compiledBy && (
+                      <div className={styles.compilationInfo}>
+                        <span className={styles.compiler}>
+                          Run by: {compilationState.compiledBy}
+                        </span>
+                        <span className={styles.timestamp}>
+                          at {new Date(compilationState.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  'No output yet'
                 )}
-              </>
-            ) : (
-              'No output yet'
-            )}
-          </pre>
+              </pre>
+            </div>
+          </div>
+        </div>
+        <div className={styles.chatSection}>
+          <div className={styles.chatMessages}>
+            {messages?.map((message: ChatMessage) => (
+              <div 
+                key={message.id} 
+                className={`${styles.message} ${message.sender === userInfo.name ? styles.ownMessage : ''}`}
+              >
+                <div className={styles.messageHeader}>
+                  <span className={styles.messageSender}>{message.sender}</span>
+                  <span className={styles.messageTime}>
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div className={styles.messageContent}>{message.text}</div>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={handleSendMessage} className={styles.chatForm}>
+            <input
+              type="text"
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              placeholder="Type a message..."
+              className={styles.chatInput}
+            />
+            <button type="submit" className={styles.sendButton}>
+              Send
+            </button>
+          </form>
         </div>
       </div>
     </div>
