@@ -84,6 +84,10 @@ const basicSetup: Extension = [
   ]),
 ];
 
+// Add retry configuration
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000;
+
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   documentId,
   defaultValue,
@@ -93,13 +97,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   const [yUndoManager, setYUndoManager] = useState<Y.UndoManager>();
   const editorViewRef = useRef<EditorView>();
   const [isCompiling, setIsCompiling] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const userInfo = useSelf((me) => me.info) as UserInfo;
   
-  // Get compilation state from LiveBlocks storage
   const compilationState = useStorage((root) => root.compilationState);
 
-  // Initialize compilation state if it doesn't exist
   const initializeCompilationState = useMutation(({ storage }) => {
     const existing = storage.get('compilationState');
     if (!existing) {
@@ -112,7 +115,6 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     }
   }, []);
 
-  // Update compilation state with batch mutation
   const updateCompilationState = useMutation(({ storage }, newState: Partial<CompilationState>) => {
     storage.set('compilationState', new LiveObject<CompilationState>({
       output: (storage.get('compilationState') as any)?.output ?? '',
@@ -127,8 +129,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     setElement(node);
   }, []);
 
-  // Handle compilation
-  const handleCompile = async () => {
+  const handleCompile = async (retryAttempt = 0) => {
     if (!editorViewRef.current) return;
     
     const code = editorViewRef.current.state.doc.toString();
@@ -160,6 +161,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
       
       updateCompilationState({
@@ -167,9 +172,22 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         compiledBy: userInfo.name,
         timestamp: Date.now()
       });
+
+      // Reset retry count on success
+      setRetryCount(0);
+      
     } catch (error) {
+      console.error('Compilation error:', error);
+      
+      // Implement retry logic
+      if (retryAttempt < MAX_RETRIES) {
+        setRetryCount(retryAttempt + 1);
+        setTimeout(() => handleCompile(retryAttempt + 1), RETRY_DELAY * (retryAttempt + 1));
+        return;
+      }
+
       updateCompilationState({
-        output: `Error: ${(error as Error).message}`,
+        output: `Error: Unable to compile code. Please try again. ${(error as Error).message}`,
         compiledBy: userInfo.name,
         timestamp: Date.now()
       });
@@ -178,7 +196,6 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     }
   };
 
-  // Initialize editor and compilation state
   useEffect(() => {
     if (!element || !room || !userInfo) return;
 
@@ -186,15 +203,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     let ydoc: Y.Doc;
 
     try {
-      // Initialize compilation state
       initializeCompilationState();
 
-      // Create Yjs document and provider
       ydoc = new Y.Doc();
       provider = new LiveblocksYjsProvider(room as any, ydoc);
       const ytext = ydoc.getText("codemirror");
       
-      // Set initial content if provided
       if (defaultValue && ytext.toString() === '') {
         ytext.insert(0, defaultValue);
       }
@@ -202,14 +216,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       const undoManager = new Y.UndoManager(ytext);
       setYUndoManager(undoManager);
 
-      // Set awareness state
       provider.awareness.setLocalStateField("user", {
         name: userInfo.name,
         color: userInfo.color || "#000000",
         colorLight: (userInfo.color || "#000000") + "80",
       });
 
-      // Create editor state with Python language support
       const state = EditorState.create({
         doc: ytext.toString(),
         extensions: [
@@ -219,7 +231,6 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         ],
       });
 
-      // Create and store editor view
       const view = new EditorView({
         state,
         parent: element,
@@ -247,11 +258,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       <div className={styles.editorContainer} ref={ref}></div>
       <div className={styles.compileSection}>
         <button 
-          onClick={handleCompile}
+          onClick={() => handleCompile(0)}
           className={styles.compileButton}
           disabled={isCompiling}
         >
-          {isCompiling ? 'Running...' : 'Run Python Code'}
+          {isCompiling ? `Running${retryCount > 0 ? ` (Retry ${retryCount}/${MAX_RETRIES})` : '...'}` : 'Run Python Code'}
         </button>
         <div className={styles.outputContainer}>
           <h3>Output:</h3>
