@@ -4,20 +4,20 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { NewDocumentButton } from "./new-document-button";
 import { CodeDocumentCard } from "./code-document-card";
-import { Id } from "@/convex/_generated/dataModel";
+// import { Id } from "@/convex/_generated/dataModel";
 
-interface CodeDocument {
-    _id: Id<"codeDocuments">;
-    _creationTime: number;
-    title: string;
-    orgId: string;
-    authorId: string;
-    authorName?: string;
-    language: string;
-    imageUrl: string;
-    lastModified: number;
-    content?: string;
-}
+// interface CodeDocument {
+//     _id: Id<"codeDocuments">;
+//     _creationTime: number;
+//     title: string;
+//     orgId: string;
+//     authorId: string;
+//     authorName?: string;
+//     language: string;
+//     imageUrl: string;
+//     lastModified: number;
+//     content?: string;
+// }
 
 interface CodeDocumentListProps {
     orgId: string;
@@ -39,7 +39,7 @@ const languageImages = {
 
 export const CodeDocumentList = ({
     orgId,
-    query,
+    // query,
 }: CodeDocumentListProps) => {
     const data = useQuery(api.codeDocuments.get, { orgId });
 

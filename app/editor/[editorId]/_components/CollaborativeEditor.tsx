@@ -6,9 +6,9 @@ import { python } from "@codemirror/lang-python";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import { useRoom, useSelf, useStorage, useMutation } from "@liveblocks/react/suspense";
-import { LiveMap, LiveObject, JsonObject, LiveList } from "@liveblocks/client";
-import { Layer, LayerType } from "@/types/canvas";
-import { Storage , ChatMessage, CompilationState} from "@/types/storage";
+import { Room, LiveObject, LiveList } from "@liveblocks/client";
+// import { Layer, LayerType } from "@/types/canvas";
+import { ChatMessage, CompilationState} from "@/types/storage";
 import {
   lineNumbers,
   highlightActiveLineGutter,
@@ -54,6 +54,12 @@ interface UserInfo {
 interface CollaborativeEditorProps {
   documentId: string;
   defaultValue?: string;
+}
+
+interface CompilationStateStorage {
+  output?: string;
+  compiledBy?: string;
+  timestamp?: number;
 }
 
 const handleImport = (editorView: EditorView | undefined | null) => {
@@ -120,7 +126,7 @@ const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
 
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
-  documentId,
+  // documentId,
   defaultValue,
 }) => {
   const room = useRoom();
@@ -155,12 +161,19 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   }, []);
 
   const updateCompilationState = useMutation(({ storage }, newState: Partial<CompilationState>) => {
+    // storage.set('compilationState', new LiveObject<CompilationState>({
+    //   output: (storage.get('compilationState') as any)?.output ?? '',
+    //   compiledBy: (storage.get('compilationState') as any)?.compiledBy ?? '',
+    //   timestamp: (storage.get('compilationState') as any)?.timestamp ?? Date.now(),
+    //   ...newState
+    // }));
     storage.set('compilationState', new LiveObject<CompilationState>({
-      output: (storage.get('compilationState') as any)?.output ?? '',
-      compiledBy: (storage.get('compilationState') as any)?.compiledBy ?? '',
-      timestamp: (storage.get('compilationState') as any)?.timestamp ?? Date.now(),
+      output: (storage.get('compilationState') as CompilationStateStorage)?.output ?? '',
+      compiledBy: (storage.get('compilationState') as CompilationStateStorage)?.compiledBy ?? '',
+      timestamp: (storage.get('compilationState') as CompilationStateStorage)?.timestamp ?? Date.now(),
       ...newState
     }));
+
   }, []);
 
   const sendMessage = useMutation(({ storage }, text: string) => {
@@ -268,7 +281,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       initializeStorage();
 
       ydoc = new Y.Doc();
-      provider = new LiveblocksYjsProvider(room as any, ydoc);
+      provider = new LiveblocksYjsProvider(room as Room, ydoc);
       const ytext = ydoc.getText("codemirror");
       
       if (defaultValue && ytext.toString() === '') {

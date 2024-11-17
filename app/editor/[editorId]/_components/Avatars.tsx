@@ -9,13 +9,16 @@ export function Avatars() {
     <div className={styles.avatars}>
       {users.map(({ connectionId, info }) => {
         return (
-          <Avatar key={connectionId} picture={info.picture} name={info.name} />
+          <Avatar 
+             key={connectionId} 
+             picture={info.picture || "/default-avatar.png"} 
+             name={info.name} />
         );
       })}
       {currentUser && (
         <div className="relative ml-8 first:ml-0">
           <Avatar
-            picture={currentUser.info.picture}
+            picture={currentUser.info.picture || "/default-avatar.png"}
             name={currentUser.info.name}
           />
         </div>

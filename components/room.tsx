@@ -28,6 +28,9 @@ export const Room = ({ children, roomId, fallback, type = "whiteboard" }: RoomPr
       selection: [],
       pencilDraft: null,
       pencilColor: null,
+      codeSelection: null,
+      codeLanguage: null,
+      cursorAwareness: null
     };
 
     return type === "code" 
@@ -44,6 +47,11 @@ export const Room = ({ children, roomId, fallback, type = "whiteboard" }: RoomPr
       layers: new LiveMap<string, LiveObject<Layer>>(),
       layerIds: new LiveList<string>([]),
       messages: new LiveList([]), // Initialize with empty array
+      compilationState: new LiveObject({
+        output: "",
+        compiledBy: "",
+        timestamp: Date.now(),
+      })
     };
 
     return type === "code"

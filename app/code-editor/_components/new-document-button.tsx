@@ -28,9 +28,10 @@ export const NewDocumentButton = ({
             });
 
             // documentId is directly the ID string from Convex
-            //router.push(`/code-editor/${documentId}`);
+            router.push(`/editor/${documentId}`);
             toast.success("Code document created");
         } catch (error) {
+            console.error(error);
             toast.error("Failed to create code document");
         }
     };

@@ -23,6 +23,11 @@ interface ColorPickerProps {
     lastUsedColor: Color;
 }
 
+interface DebouncedPickerProps {
+    color: string;
+    onChange: (value: string) => void;
+}
+
 const CustomColorPicker = forwardRef<
     HTMLInputElement,
     Omit<ButtonProps, "value" | "onChange" | "onBlur"> & ColorPickerProps
@@ -77,7 +82,7 @@ const CustomColorPicker = forwardRef<
     }
 );
 
-const DebouncedPicker = ({ color, onChange }: any) => {
+const DebouncedPicker = ({ color, onChange }: DebouncedPickerProps) => {
     const [value, setValue] = useState(color);
   
     useDebouncyEffect(() => onChange(value), 200, [value]);

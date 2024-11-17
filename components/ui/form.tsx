@@ -7,6 +7,8 @@ import {
   Controller,
   FormProvider,
   useFormContext,
+  Control,
+  ControllerRenderProps,
   type FieldValues,
   type Path,
 } from "react-hook-form";
@@ -20,7 +22,8 @@ type FormFieldContextValue<TFieldValues extends FieldValues> = {
   name: Path<TFieldValues>;
 };
 
-const FormFieldContext = React.createContext<FormFieldContextValue<any>>({} as FormFieldContextValue<any>);
+// const FormFieldContext = React.createContext<FormFieldContextValue<any>>({} as FormFieldContextValue<any>);
+const FormFieldContext = React.createContext<FormFieldContextValue<FieldValues>>({} as FormFieldContextValue<FieldValues>);
 
 const FormField = <
   TFieldValues extends FieldValues
@@ -28,8 +31,8 @@ const FormField = <
   ...props
 }: {
   name: Path<TFieldValues>;
-  control: any;
-  render: any;
+  control: Control<TFieldValues>;
+  render: (props: { field: ControllerRenderProps<TFieldValues> }) => React.ReactElement;
 }) => {
   return (
     <FormFieldContext.Provider value={{ name: props.name }}>
