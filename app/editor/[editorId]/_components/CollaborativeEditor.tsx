@@ -56,6 +56,40 @@ interface CollaborativeEditorProps {
   defaultValue?: string;
 }
 
+const handleImport = (editorView: EditorView | undefined | null) => {
+  if (!editorView) return; // Safeguard for undefined or null
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".py";
+  fileInput.onchange = (e) => {
+    const target = e.target as HTMLInputElement;
+    const file = target?.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        editorView.dispatch({
+          changes: { from: 0, to: editorView.state.doc.length, insert: content },
+        });
+      };
+      reader.readAsText(file);
+    }
+  };
+  fileInput.click();
+};
+
+const handleExport = (editorView: EditorView | undefined | null) => {
+  if (!editorView) return; // Safeguard for undefined or null
+  const content = editorView.state.doc.toString();
+  const blob = new Blob([content], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "code.py";
+  link.click();
+};
+
+
+
 const basicSetup: Extension = [
   lineNumbers(),
   highlightActiveLineGutter(),
@@ -279,7 +313,15 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     <div className={styles.container}>
       <div className={styles.editorHeader}>
         <div className={styles.toolbar}>
-          {yUndoManager ? <Toolbar yUndoManager={yUndoManager} /> : null}
+          {/* {yUndoManager ? <Toolbar yUndoManager={yUndoManager} /> : null} */}
+          {yUndoManager ? (
+  <Toolbar
+    yUndoManager={yUndoManager}
+    handleImport={() => handleImport(editorViewRef.current)}
+    handleExport={() => handleExport(editorViewRef.current)}
+  />
+) : null}
+
         </div>
         <Avatars />
       </div>
